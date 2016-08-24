@@ -1,0 +1,570 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xxx_manifest="fiveminutesleft.manifest">
+<head>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="viewport" content="width=device-width; height=device-height; initial-scale=0.8; user-scalable = yes">
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+<title>Five minutes left</title>
+<meta name="description" content="Count-down timer">
+<style type="text/css">
+<!--
+
+body {
+    background: rgb(0,0,0);
+	font-family: sans-serif;
+}
+
+table.eingabetabelle {border: 1px solid #CCC}
+table.eingabetabelle th {background-color: #DDD; padding: 3px 5px}
+table.eingabetabelle td {background-color: #EEE}
+
+h1, h2, p, li {
+    font-family: Helvetica;
+    text-shadow: rgba(255,255,255,.2) 0 1px 1px;
+    color: #aaaaaa;
+    margin: 10px 20px 6px;
+}
+
+h1 {
+    font-size: 20px;
+}
+
+h2 {
+    font-size: 18px;
+}
+
+td, p, li, th {
+    font-size: 12px;
+}
+
+a:link { text-decoration:none; }
+
+input[type="text"] {
+    border: 0 none;
+    color: #333333;
+    display: inline-block;
+    font-family: Helvetica;
+    margin-left: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.active input[type="text"] {
+	background-color: #aaccaa;
+}
+
+table.eingabetabelle .active td {
+	background-color: #aaccaa;
+}
+
+.tab_zen, .tab_zen input[type="text"] {
+	text-align: center;
+}
+
+.tab_tit, .tab_ref {
+	text-align: left;
+}
+
+.zaehler {
+	font-size: 28px;
+	font-weight: bold;
+	position: relative;
+	width:100px;
+	height: 40px;
+	color: #333333;
+	top: -80px;
+    // margin-top: -80px;
+	// margin-bottom: 50px;
+}
+
+#tortediv {
+	height: 310px;
+}
+-->
+</style>
+</head>
+
+<body>
+
+<script>
+// Global definierte Variablen
+var zeiten = [45,20,15]; // Dauer der Vorträge
+var titel = ["Erster Titel", "Zweiter Titel", "Dritter Titel"];
+var referenten = ["Erster Referent", "Zweiter Referent", "Dritter Referent"];
+// var zeiten = [45]; // Dauer der Vorträge
+// var titel = ["Wie repariere ich meine Rollerblades mit Hausmitteln?"];
+// var referenten = ["Emilia Meierling"];
+var zeit_n = 5; // Zeit ab der gewarnt wird (z.B. 5 Minuten)
+var unit = 1; // Einheit für zeiten und zeit_n: Sekunden: 1, Minuten: 60, Stunden: 3600
+var fps = 10; // frames per second
+var radius = 150; // Radius der Torte in Pixeln
+var canvassize = 300; // Höhe und Breite der Zeichenbox
+var colorAusgangskreis = "#00aa00";
+var colorNleft = "#aaaa00";
+var colorZeitgut = "#aaccaa";
+var colorUeberzogen = '#ff0000';
+var colorButtons = "#00aa00";
+
+// Deklarationen
+var vortragsnr = 0; // Zählvariable für Vorträge
+var contizaehler = 0; // Animationsdurchläufe, Zählvariable für loop 0..animationSpeed
+var scale = 0; // Skalierungsfaktor für Kreis 0..1
+var startwinkel_off = -90;
+var endwinkel_off = 270;
+var zeitstring = ""; // darzustellende Restzeit
+var colorZeitlaeuft = ""; // Farbe des wandernden Kuchenstücks
+var zeitlaeuft = false;
+var timer = 0;
+var zeitvergangen = 0;
+var zeilennr = 0; // laufende Nummer für Tabellenzeilen
+var kennung = []; // Kennung für Vorträge (Id zum löschen und markieren)
+
+function firstRun () {
+	// zeichne Tabelle mit zeiten[], titel[] und referenten []
+	for (var z=0; z < zeiten.length; z++) {
+		neuezeile();
+	}
+   // tabFuellen ();
+   initKreis ();
+   zeitreset();
+   initButton ('zurueck');
+   initButton ('vorwaerts');
+   initButton ('play');
+   initButton ('pause');   
+	}
+
+function initKreis () {
+
+	document.getElementById("canvasElement").width = canvassize;
+	document.getElementById("canvasElement").height = canvassize;	
+	context = document.getElementById("canvasElement").getContext('2d');
+	context.clearRect (0, 0, canvassize, canvassize);
+	drawAusgangskreis();
+	
+	// setzte Vortragstitel
+	document.getElementById('titel').innerHTML = titel[vortragsnr];
+	document.getElementById('referent').innerHTML = referenten[vortragsnr];
+	
+	// Markiere Tabellenzeile,die gerade läuft
+	for (var i=0; i<zeiten.length; i++) {
+		if (vortragsnr == i) {document.getElementById(kennung[i]).setAttribute("class","active");}
+		else {document.getElementById(kennung[i]).removeAttribute("class","active");}
+		}
+	}
+
+function initButton (id) {
+	if (id == "zurueck") {
+		document.getElementById(id).width = 40;
+		document.getElementById(id).height = 40;	
+		var context = document.getElementById(id).getContext('2d');
+		context.clearRect (0, 0, 40, 40);
+		context.beginPath();
+		context.moveTo(5, 35);
+		context.lineTo(5, 5);
+		context.lineTo(8, 5);
+		context.lineTo(8, 35);
+		context.lineTo(5, 35);
+		context.moveTo(9, 20);
+		context.lineTo(35, 35);
+		context.lineTo(35, 5);
+		context.lineTo(9, 20);
+		context.closePath();
+		context.fillStyle = colorButtons;
+		context.fill();
+		}
+
+	if (id == "vorwaerts") {
+		document.getElementById(id).width = 40;
+		document.getElementById(id).height = 40;	
+		var context = document.getElementById(id).getContext('2d');
+		context.clearRect (0, 0, 40, 40);
+		context.beginPath();
+		context.moveTo(32, 35);
+		context.lineTo(35, 35);
+		context.lineTo(35, 5);
+		context.lineTo(32, 5);
+		context.lineTo(32, 35);
+		context.moveTo(31, 20);
+		context.moveTo(5, 5);
+		context.lineTo(5, 35);
+		context.lineTo(31, 20);
+		context.closePath();
+		context.fillStyle = colorButtons;
+		context.fill();
+		}
+
+	if (id == "play") {
+		document.getElementById(id).width = 40;
+		document.getElementById(id).height = 40;	
+		var context = document.getElementById(id).getContext('2d');
+		context.clearRect (0, 0, 40, 40);
+		context.beginPath();
+		context.moveTo(7, 35);
+		context.lineTo(32, 20);
+		context.lineTo(7, 5);
+		context.lineTo(7, 35);
+		context.closePath();
+		context.fillStyle = colorButtons;
+		context.fill();
+		}
+
+	if (id == "pause") {
+		document.getElementById(id).width = 40;
+		document.getElementById(id).height = 40;	
+		var context = document.getElementById(id).getContext('2d');
+		context.clearRect (0, 0, 40, 40);
+		context.beginPath();
+		context.moveTo(11, 35);
+		context.lineTo(17, 35);
+		context.lineTo(17, 5);
+		context.lineTo(11, 5);
+		context.lineTo(11, 35);
+		context.moveTo(23, 35);
+		context.lineTo(29, 35);
+		context.lineTo(29, 5);
+		context.lineTo(23, 5);
+		context.lineTo(23, 35);
+		context.closePath();
+		context.fillStyle = colorButtons;
+		context.fill();
+		}
+	}
+
+
+function zeitreset () {
+	zeitlaeuft = false;
+    contizaehler = 0;
+	zeitvergangen = 0;
+	colorZeitlaeuft = colorZeitgut;
+	document.getElementById('play').style.display = "block";
+	document.getElementById('pause').style.display = "none";
+	document.getElementById('torte').title = "Start";
+	writeTime(); // Zeitdarstellung setzen
+	}
+
+function drawPie  () {		
+	// einen neuen Pfad initialisieren
+	context.beginPath();
+	// Startposition festlegen 
+	context.moveTo(canvassize/2, canvassize/2);
+		
+	startwinkel = toRad(startwinkel_off);
+	endwinkel = toRad(endwinkel_off);
+	aktuellerwinkel = startwinkel + (endwinkel - startwinkel) * scale;
+
+	//arc(x, y, radius, startAngle, endAngle, anticlockwise)
+	context.arc(canvassize/2, canvassize/2, radius, startwinkel, aktuellerwinkel, false);
+	context.closePath();
+
+	context.fillStyle = colorZeitlaeuft;
+	context.fill();
+
+}
+
+function writeTime  () {		
+	restsekunden = (zeiten[vortragsnr] - zeitvergangen)*unit;
+	if (restsekunden < 0) {
+		restsekunden *= -1;
+		vorzeichen = "-";
+	} else {
+		vorzeichen = "&nbsp;";
+	}
+	// Uhr formatieren
+	stunden = Math.floor(restsekunden / 3600);
+	minuten = Math.floor((restsekunden - stunden * 3600)/ 60);
+	sekunden = Math.floor(restsekunden - minuten * 60 - stunden * 3600);
+	if (stunden > 0) {
+		if (minuten < 10) minuten = "0" + minuten;
+		stundenstring = stunden+":";
+	}
+	else {
+		stundenstring = "";
+	}
+	if (sekunden < 10) sekunden = "0" + sekunden;
+	zeitstring = vorzeichen+stundenstring+minuten+":"+sekunden;
+
+	document.getElementById('timer').innerHTML = zeitstring;	
+}
+
+function drawAusgangskreis  () {
+	// wenn Zeit noch nicht abgelaufen ist
+	if (zeitvergangen < zeiten[vortragsnr]) {
+		// Die letzten n Minuten sind andersfarbig
+		anteil_n = zeit_n / zeiten[vortragsnr];
+		if (anteil_n > 1) anteil_n = 1;
+		
+		// einen neuen Pfad initialisieren
+		context.beginPath();
+		// Startposition festlegen 
+		context.moveTo(canvassize/2, canvassize/2);
+		startwinkel = toRad(startwinkel_off);
+		endwinkel = toRad(endwinkel_off);
+		aktuellerwinkel = startwinkel + (endwinkel - startwinkel) * (1 -anteil_n);
+		context.arc(canvassize/2, canvassize/2, radius, startwinkel, aktuellerwinkel, false);
+		context.closePath();
+		context.fillStyle = colorAusgangskreis;
+		context.fill();
+		
+		// einen neuen Pfad initialisieren
+		context.beginPath();
+		// Startposition festlegen 
+		context.moveTo(canvassize/2, canvassize/2);
+		context.arc(canvassize/2, canvassize/2, radius, aktuellerwinkel, endwinkel, false);
+		context.closePath();
+		context.fillStyle = colorNleft;
+		context.fill();
+		}
+	// sonst grauen Kreis zeichnen
+	else {
+		// einen neuen Pfad initialisieren
+		context.beginPath();
+		// Startposition festlegen 
+		context.moveTo(canvassize/2, canvassize/2);
+		startwinkel = toRad(startwinkel_off);
+		endwinkel = toRad(endwinkel_off);
+		context.arc(canvassize/2, canvassize/2, radius, startwinkel, endwinkel, false);
+		context.closePath();
+		context.fillStyle = colorZeitlaeuft;
+		context.fill();
+		}
+
+}
+
+
+function looptime () {
+	contizaehler++;
+	zeitvergangen = contizaehler / unit / fps; // zeitvergangen ist Zahl in jeweiliger Einheit
+	if (zeiten[vortragsnr] != 0) scale = zeitvergangen / zeiten[vortragsnr];
+	else scale = 1; // dann wird der Kreis gleich komplett rot dargestellt
+	if (scale > 1) scale -= 1; // scale soll maximal 1 werden
+	// Kreis einmal durchgelaufen? für Minuten: minutenvergangen > zeiten[vortragsnr]
+	if(zeitvergangen > zeiten[vortragsnr]) {
+	   // dann ändert sich die Farbe
+	   colorZeitlaeuft = colorUeberzogen;
+	}
+	else {
+	   // oder Zeit noch gut (das ändert sich ggf. während der Laufzeit durch Eingabe in der Tabelle)
+	   colorZeitlaeuft = colorZeitgut;	
+	}
+	drawPie(); // Animation durchführen
+	writeTime(); // Zeitdarstellung setzen
+}
+
+
+function startAnimation() {
+       timer = setInterval(looptime, 1000 / fps );
+}
+   
+function stopAnimation() {
+       clearInterval(timer); // Schleife abbrechen
+}
+   
+function zurueck() {
+		stopAnimation();
+       if (!zeitlaeuft && vortragsnr > 0) {vortragsnr-- };
+	   zeitreset();
+	   initKreis();
+}
+   
+function vorwaerts() {
+		stopAnimation();
+       if (vortragsnr < (titel.length -1)) {vortragsnr++ };
+	   zeitreset();
+	   initKreis();
+}
+
+function springe(zeilenkennung) {
+		stopAnimation();
+		vortragsnr = kennung.indexOf(zeilenkennung);
+		zeitreset();
+		initKreis();
+}
+   
+function toggleAnimation() {
+    if (zeitlaeuft) {
+		zeitlaeuft = false;
+		document.getElementById('play').style.display = "block";
+		document.getElementById('pause').style.display = "none";
+		// document.getElementById('startknopf').innerHTML = "WEITER";
+		document.getElementById('torte').title = "Weiter";
+		stopAnimation(); 
+	} else {
+		zeitlaeuft = true;
+		document.getElementById('play').style.display = "none";
+		document.getElementById('pause').style.display = "block";
+		//document.getElementById('startknopf').innerHTML = "PAUSE";
+		document.getElementById('torte').title = "Pause";
+		startAnimation();
+	}
+}
+function tabauslesen () {
+	// erstmal die Array löschen
+	zeiten.length = 0;
+	titel.length = 0;
+	referenten.length = 0;
+	kennung.lenght = 0;
+	// dann Tabelle durchrattern und Werte auslesen
+	for (var i=0; i<document.forms[0].length; i=i+4) {
+		zeiten[i/4] = eval(document.forms[0].elements[i].value); // Dauer des Vortrags
+		titel[i/4] = document.forms[0].elements[i+1].value; // Titel des Vortrags
+		referenten[i/4] = document.forms[0].elements[i+2].value; // Referent des Vortrags
+		kennung[i/4] = document.forms[0].elements[i+3].value; // Kennung d.h.zeilennr_n
+	}
+	// Einheit auslesen
+	if (document.forms[1].einheit[0].checked) unit = eval(document.forms[1].einheit[0].value);
+	else if (document.forms[1].einheit[1].checked) unit = eval(document.forms[1].einheit[1].value);
+	else if (document.forms[1].einheit[2].checked) unit = eval(document.forms[1].einheit[2].value);
+	if (unit == 1) fps = 10; else fps = 1;
+	if (!zeitlaeuft) zeitreset();
+	initKreis();
+	}
+
+function xxx_neuezeile () {
+	// funktioniert nicht beim IE
+	document.getElementById('eingabe').innerHTML += "        <tr id =\"zeile_"+zeilennr+"\">\n          <td align=\"left\"><input type=\"text\" size=\"6\" onchange=\"tabauslesen();return false;\" /></td>\n          <td align=\"left\"><input type=\"text\" value=\"\" size=\"30\" onchange=\"tabauslesen();return false;\" /></td>\n          <td align=\"left\"><input type=\"text\" size=\"30\" onchange=\"tabauslesen();return false;\" /></td>\n        <td><input type=\"hidden\" value=\"zeile_"+zeilennr+"\" />[<a href=\"#\" onclick=\"zeileloeschen('zeile_"+zeilennr+"');return false;\" title=\"Zeile löschen\">x</a>]</td>\n        </tr>\n";
+	zeilennr++;
+	tabFuellen();
+	}
+	
+function neuezeile () {
+	var table_id = "eingabe";
+	var table = document.getElementById( table_id );
+	var rows = table.getElementsByTagName( "tr" ).length;
+	var tr = table.insertRow( rows );
+	tr.id = "zeile_"+zeilennr;
+	var td1 = document.createElement( "td" );
+	td1.className = "tab_zen";
+	var td2 = document.createElement( "td" );
+	td2.className = "tab_zen";
+	var td3 = document.createElement( "td" );
+	var td4 = document.createElement( "td" );
+	var td5 = document.createElement( "td" );
+	td1.innerHTML = '<a href="#" onclick="springe(\'zeile_'+zeilennr+'\');return false;" title="Springe hierhin">o</a>';
+	td2.innerHTML = "<input type=\"text\" size=\"6\" onchange=\"tabauslesen();return false;\" />";
+	td3.innerHTML = "<input type=\"text\" value=\"\" size=\"30\" onchange=\"tabauslesen();return false;\" />";
+	td4.innerHTML = "<input type=\"text\" size=\"30\" onchange=\"tabauslesen();return false;\" />";
+	td5.innerHTML = "<input type=\"hidden\" value=\"zeile_"+zeilennr+"\" />[<a href=\"#\" onclick=\"zeileloeschen('zeile_"+zeilennr+"');return false;\" title=\"Zeile löschen\">x</a>]";
+	tr.appendChild( td1 );
+	tr.appendChild( td2 );
+	tr.appendChild( td3 );
+	tr.appendChild( td4 );
+	tr.appendChild( td5 );
+	kennung.push("zeile_"+zeilennr); // packe neue Kennung hinten ans Array
+	zeilennr++;
+	tabFuellen();
+	}
+	
+	
+	
+function tabFuellen () {
+	// Tabelle mit Werten füllen
+	for (var i=0; i<document.forms[0].length; i=i+4)
+		{
+		if (zeiten[i/4] == undefined) zeiten[i/4] = 0;
+		document.forms[0].elements[i].value = zeiten[i/4]; // Dauer des Vortrags
+		if (titel[i/4] == undefined) titel[i/4] = "Vortrag "+(i/4+1);
+		document.forms[0].elements[i+1].value = titel[i/4]; // Titel des Vortrags
+		if (referenten[i/4] == undefined) referenten[i/4] = "Referent "+(i/4+1);
+		document.forms[0].elements[i+2].value = referenten[i/4]; // Referent des Vortrags
+		}
+	}
+
+function zeileloeschen (id) {
+	var tablerow = document.getElementById(id);
+	document.getElementById('eingabe').removeChild(tablerow);
+	// läuft der gelöschte Vortrag gerade?
+	if (id == kennung[vortragsnr]) {
+		stopAnimation();
+		zeitreset ();
+		}
+	var akt_vortragsnr = vortragsnr; // Vortragsnummer zwischenspeichern
+	// wenn Zeile vor dem laufenden Vortrag oder die letzte Zeile gelöscht wird, dann Vortragszähler um 1 reduzieren
+	if ((kennung.indexOf(id) < vortragsnr) || (kennung.length == (vortragsnr+1))) vortragsnr--;
+	kennung.splice(akt_vortragsnr, 1); // kennung[akt_vortragsnr] aus Array löschen, unhängig von der vorigen Änderung der vortragsnr
+	tabauslesen();
+	initKreis();
+	}
+
+// Umrechung Grad -> Radiant
+function toRad (x) {
+	return (x*Math.PI)/180;	
+	}
+
+function toggleeingabe () {
+	if (document.getElementById('eingabediv').style.display == "none") {
+		document.getElementById('eingabediv').style.display = "block";
+		document.getElementById('eingabezeigen').innerHTML = "Tabelle ausblenden";
+		}
+	else {
+		document.getElementById('eingabediv').style.display = "none";
+		document.getElementById('eingabezeigen').innerHTML = "Tabelle zeigen";	
+		}
+	}
+</script>
+
+<h1 align="center" id="titel">Titel</h1>
+<h2 align="center" id="referent">Referent</h2>
+<div align="center" id="tortediv">
+<a href="#" onclick="toggleAnimation();return false;" title="Starten" id="torte">
+<canvas id="canvasElement" width="200" height="200" style="z-index:0;">
+	Ihr Browser unterst&uuml;tzt kein HTML5.
+</canvas>
+<h1 align="center" class="zaehler" id="timer"  style="z-index:1;">0:00</h1>
+</a>
+</div>
+<table width="300" border="0" align="center" cellspacing="1">
+  <tr>
+    <td align="center"><a href="#" onclick="zurueck();return false;"><canvas id="zurueck" width="40" height="40">|&lt;</canvas></a></td>
+    <td align="center"><a href="#" onclick="toggleAnimation();return false;" id="startknopf"><canvas id="play" width="40" height="40">START</canvas><canvas id="pause" width="40" height="40" style="display: none;">PAUSE</canvas></a></td>
+    <td align="center"><a href="#" onclick="vorwaerts();return false;"><canvas id="vorwaerts" width="40" height="40">&gt;|</canvas></a></td>
+  </tr>
+</table>
+<div align="center">
+   <p><a href="#" id="eingabezeigen" onclick="toggleeingabe();return false;">Tabelle zeigen</a></p>
+	<div id="eingabediv" style="display: none;">
+	<form name="form1" id="form1" method="post" action="">
+	  <table class="eingabetabelle" border="0" cellspacing="1">
+    	<thead>
+            <tr>
+                <th>&nbsp;</th>
+                <th class = "tab_zen">Dauer</th>
+                <th class = "tab_tit">Titel</th>
+                <th class = "tab_ref">Referent</th>
+                <th>&nbsp;</th>
+            </tr>  
+        </thead>
+      	<tbody id="eingabe">
+			<tr style="display: none;">
+				<td>&nbsp;</td>
+				<td>&nbsp;</td>
+				<td>&nbsp;</td>
+				<td>&nbsp;</td>
+				<td>&nbsp;</td>
+			</tr>
+        </tbody>
+      </table>
+	  <p><a href="#" onclick="neuezeile();return false;">Neue Zeile hinzugf&uuml;gen</a></p>
+	</form>
+	<p>&nbsp;</p>
+	<div align="left">
+		<form name="form2" id="form2" method="post" action="">
+			<table border="0" cellspacing="1" class="eingabetabelle">
+			  <tr>
+				<th>Einheit</th>
+			  </tr>
+			  <tr>
+				<td><label><input type="radio" name="einheit" value="1" checked="checked" onchange="tabauslesen();return false;" />Sekunden</label></td>
+			  </tr>
+			  <tr>
+				<td><input type="radio" name="einheit" value="60" onchange="tabauslesen();return false;" />Minuten</label></td>
+			  </tr>
+			  <tr>
+				<td><input type="radio" name="einheit" value="3600" onchange="tabauslesen();return false;" />Stunden</label></td>
+			  </tr>
+			</table>
+		</form>
+	</div>
+	</div>
+</div>
+<script>firstRun()</script>
+</body></html>
